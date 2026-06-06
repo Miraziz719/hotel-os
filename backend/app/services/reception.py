@@ -97,11 +97,12 @@ async def find_best_room(
     floor_preference: int | None,
     lift_preference: bool,
 ) -> Room | None:
+    # Build a deterministic priority list first, then lock one candidate at a time.
+    # Locking the full result set can starve concurrent check-ins and trigger TS-06 failures.
     stmt = (
         select(Room)
         .where(Room.room_type == room_type, Room.status == RoomStatus.clean)
-        .order_by(Room.last_cleaned_at.asc())
-        .with_for_update(skip_locked=True)
+        .order_by(Room.last_cleaned_at.asc(), Room.floor.asc(), Room.number.asc())
     )
     result = await db.execute(stmt)
     candidates: list[Room] = list(result.scalars().all())
@@ -119,8 +120,21 @@ async def find_best_room(
     if lift_preference:
         ordered.sort(key=lambda room: (0 if room.near_lift else 1))
 
-    return ordered[0] if ordered else None
+    for candidate in ordered:
+        lock_stmt = (
+            select(Room)
+            .where(
+                Room.id == candidate.id,
+                Room.status == RoomStatus.clean,
+            )
+            .with_for_update(skip_locked=True)
+        )
+        lock_result = await db.execute(lock_stmt)
+        locked_room = lock_result.scalar_one_or_none()
+        if locked_room:
+            return locked_room
 
+    return None
 
 async def get_available_rooms(
     db: AsyncSession,

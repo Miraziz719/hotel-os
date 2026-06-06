@@ -142,6 +142,43 @@ http://127.0.0.1:5173
 
 Test foydalanuvchilar login sahifasida ham ko'rsatiladi.
 
+## Testlash
+
+Baholashdagi `TS-01` dan `TS-08` gacha stsenariylar uchun tayyor skript bor:
+
+```bash
+python backend/tests/test_scenarios.py
+```
+
+Testdan oldin quyidagilar tayyor bo'lishi kerak:
+
+1. Dependency'lar o'rnatilgan bo'lishi kerak
+2. Database va demo data tayyor bo'lishi kerak:
+
+```bash
+python -m backend.app.bootstrap_demo
+```
+
+3. 4 ta backend servis ishga tushgan bo'lishi kerak:
+
+```bash
+python backend/run.py
+```
+
+Skript quyidagi stsenariylarni tekshiradi:
+
+- `TS-01` - 3-qavat double room check-in
+- `TS-02` - 204-xona check-out va cleaning queue
+- `TS-03` - 204-xonani tozalash va qayta available bo'lishi
+- `TS-04` - 301-xona room service buyurtmasi va statuslari
+- `TS-05` - 115-xona uchun kritik maintenance issue
+- `TS-06` - parallel check-in
+- `TS-07` - barcha suite xonalar band bo'lgandagi xabar
+- `TS-08` - noto'g'ri xona raqami validatsiyasi
+
+Natija terminalda `PASS` yoki `FAIL` ko'rinishida chiqadi. Eng toza va takrorlanuvchi natija uchun testlarni yangi tayyorlangan demo baza ustida ishga tushirish tavsiya etiladi.
+`rich` kutubxonasi o'rnatilgan bo'lsa, yakunda rangli jadval ko'rinishida umumiy natija ham chiqadi.
+
 ## Muhim endpointlar
 
 ### Reception
