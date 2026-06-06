@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Tabs, Table, Button, Alert, Tag, Spin, Modal, Card, notification, Input, Image } from 'antd'
+import { Tabs, Table, Button, Alert, Tag, Spin, Modal, Card, notification, Image } from 'antd'
 import { ShoppingOutlined, UnorderedListOutlined, CheckCircleOutlined } from '@ant-design/icons'
 import RoomServiceMenu from './RoomServiceMenu'
 import { api } from '../utils/api'
 import { playNotificationSound } from '../hooks/useWebSocket'
 import { useWSEvents } from '../hooks/WSContext'
-import ImageUpload from './ImageUpload'
 
 const STATUS_COLOR = { received:'blue', preparing:'orange', delivering:'red', delivered:'green' }
 const STATUS_LABEL = { received:'Qabul qilindi', preparing:'Tayyorlanmoqda', delivering:'Yetkazilmoqda', delivered:'Tugatildi' }
@@ -194,12 +193,11 @@ function MenuTab({ isGuest, roomNumber }) {
     async function load() {
       try {
         setError('')
-        const data = await api.get('/room-service/rooms')
+        const data = await api.get('/reception/occupied-rooms')
         if (!active) return
         setRooms(
           data
-            .filter(r => r.status === 'occupied')
-            .map(r => ({ value: r.number, label: `Xona ${r.number} - ${r.room_type}` })),
+            .map(r => ({ value: r.room_number, label: `Xona ${r.room_number} - ${r.room_type}` })),
         )
       } catch (e) {
         if (active) setError(e.message)
@@ -232,9 +230,6 @@ export default function RoomServiceWorkspace({ isGuest = false, roomNumber = '' 
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState(null)
   const [updatingId, setUpdatingId] = useState(null)
-  const [advanceModal, setAdvanceModal] = useState(null)
-  const [advanceNote, setAdvanceNote] = useState('')
-  const [advanceImage, setAdvanceImage] = useState(null)
 
   async function loadOrders() {
     setLoading(true)
@@ -300,23 +295,18 @@ export default function RoomServiceWorkspace({ isGuest = false, roomNumber = '' 
 
   function advanceOrder(orderId) {
     if (isGuest) return
-    setAdvanceNote('')
-    setAdvanceImage(null)
-    setAdvanceModal(orderId)
+    doAdvanceOrder(orderId)
   }
 
-  async function doAdvanceOrder(orderId, note, imageUrl) {
+  async function doAdvanceOrder(orderId) {
     setMessage(null)
     setUpdatingId(orderId)
     try {
       const data = await api.post(`/room-service/order/${orderId}/advance`, {
-        note: note || null,
-        image_url: imageUrl || null,
+        note: null,
+        image_url: null,
       })
       setMessage({ type: 'success', text: data.message })
-      setAdvanceModal(null)
-      setAdvanceNote('')
-      setAdvanceImage(null)
       await loadOrders()
     } catch (e) {
       setMessage({ type: 'error', text: e.message })
@@ -373,39 +363,6 @@ export default function RoomServiceWorkspace({ isGuest = false, roomNumber = '' 
         {message && <Alert type={message.type} message={message.text} showIcon className="mb-4" />}
         <Tabs defaultActiveKey="menu" items={tabs} size="large" />
       </div>
-
-      <Modal
-        open={!!advanceModal}
-        title="Keyingi bosqichga o'tkazish"
-        onCancel={() => { setAdvanceModal(null); setAdvanceNote(''); setAdvanceImage(null) }}
-        footer={[
-          <Button key="cancel" onClick={() => { setAdvanceModal(null); setAdvanceNote(''); setAdvanceImage(null) }}>
-            Bekor qilish
-          </Button>,
-          <Button
-            key="confirm"
-            type="primary"
-            loading={!!updatingId}
-            onClick={() => doAdvanceOrder(advanceModal, advanceNote, advanceImage)}
-          >
-            Tasdiqlash
-          </Button>,
-        ]}
-      >
-        <p className="text-gray-500 mb-4 text-sm">Ixtiyoriy ravishda izoh va rasm qo'shing.</p>
-        <Input.TextArea
-          rows={3}
-          placeholder="Izoh (ixtiyoriy)"
-          value={advanceNote}
-          onChange={e => setAdvanceNote(e.target.value)}
-          className="mb-3"
-        />
-        <ImageUpload
-          value={advanceImage}
-          onChange={setAdvanceImage}
-          label="Rasm yuklash (ixtiyoriy)"
-        />
-      </Modal>
     </>
   )
 }

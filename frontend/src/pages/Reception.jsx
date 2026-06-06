@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Card, Checkbox, Empty, Form, Input, InputNumber, Select, Table, Tabs, Tag, notification } from 'antd'
-import { AppstoreOutlined, HistoryOutlined, LoginOutlined, TeamOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Checkbox, Dropdown, Empty, Form, Input, InputNumber, Select, Table, Tabs, Tag, notification } from 'antd'
+import { AppstoreOutlined, HistoryOutlined, LoginOutlined, TeamOutlined, SortAscendingOutlined } from '@ant-design/icons'
 import { api } from '../utils/api'
 import { useWSEvents } from '../hooks/WSContext'
 
@@ -45,6 +45,15 @@ function formatDateTime(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString()
+}
+
+function formatDateTimeLocalValue(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const offset = date.getTimezoneOffset()
+  const localDate = new Date(date.getTime() - offset * 60000)
+  return localDate.toISOString().slice(0, 16)
 }
 
 function buildPreviewUrl(roomNumber, discount, extraCharges) {
@@ -111,6 +120,8 @@ function CheckOutPanel({ room, onCompleted }) {
   const [discount, setDiscount] = useState(0)
   const [extraCharges, setExtraCharges] = useState(0)
   const [extraReason, setExtraReason] = useState('')
+  const [discountTouched, setDiscountTouched] = useState(false)
+  const [extraTouched, setExtraTouched] = useState(false)
   const [loading, setLoading] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [message, setMessage] = useState(null)
@@ -125,6 +136,17 @@ function CheckOutPanel({ room, onCompleted }) {
         const data = await api.get(buildPreviewUrl(room.room_number, discount, extraCharges))
         if (!active) return
         setPreview(data)
+        if (!discountTouched && Number(data.suggested_discount || 0) !== Number(discount || 0)) {
+          setDiscount(Number(data.suggested_discount || 0))
+        }
+        if (!extraTouched) {
+          if (Number(data.suggested_extra_charges || 0) !== Number(extraCharges || 0)) {
+            setExtraCharges(Number(data.suggested_extra_charges || 0))
+          }
+          if (!extraReason && data.suggested_extra_charge_reason) {
+            setExtraReason(data.suggested_extra_charge_reason)
+          }
+        }
       } catch (e) {
         if (active) setMessage({ type: 'error', text: e.message })
       } finally {
@@ -144,6 +166,8 @@ function CheckOutPanel({ room, onCompleted }) {
       setDiscount(0)
       setExtraCharges(0)
       setExtraReason('')
+      setDiscountTouched(false)
+      setExtraTouched(false)
       setMessage(null)
     }
   }, [room])
@@ -200,14 +224,27 @@ function CheckOutPanel({ room, onCompleted }) {
           <div className="font-semibold mt-1">{formatDateTime(preview?.check_in || room?.check_in)}</div>
         </div>
         <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+          <div className="text-xs text-gray-500">Rejalashtirilgan check-out</div>
+          <div className="font-semibold mt-1">{formatDateTime(preview?.planned_check_out || room?.planned_check_out)}</div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
           <div className="text-xs text-gray-500">Tunlar soni</div>
           <div className="font-semibold mt-1">{preview?.nights ?? room?.nights}</div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-3">
           <div className="text-xs text-gray-500">Jami summa</div>
           <div className="font-semibold text-lg mt-1">{formatMoney(preview?.total ?? room?.total_due)}</div>
         </div>
       </div>
+
+      {!!preview?.pricing_notes?.length && (
+        <Alert
+          type="info"
+          showIcon
+          className="mb-5"
+          message={preview.pricing_notes.join(' ')}
+        />
+      )}
 
       <div className="grid md:grid-cols-2 gap-4 mb-5">
         <Card size="small" title="Hisob-kitob">
@@ -226,33 +263,79 @@ function CheckOutPanel({ room, onCompleted }) {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-500">Chegirma</span>
-              <span className="font-medium">-{formatMoney(preview?.discount)}</span>
+              <span className="font-medium">-{formatMoney(discount)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-500">Qo'shimcha</span>
-              <span className="font-medium">{formatMoney(preview?.extra_charges)}</span>
+              <span className="font-medium">{formatMoney(extraCharges)}</span>
             </div>
             <div className="flex items-center justify-between pt-3 border-t font-semibold">
               <span>Yakuniy summa</span>
-              <span>{formatMoney(preview?.total ?? room?.total_due)}</span>
+              <span>
+                {formatMoney(
+                  Math.max(
+                    0,
+                    Number(preview?.room_charges ?? room?.room_charges ?? 0)
+                    + Number(preview?.service_charges ?? room?.service_charges ?? 0)
+                    + Number(extraCharges || 0)
+                    - Number(discount || 0),
+                  ),
+                )}
+              </span>
             </div>
           </div>
         </Card>
 
         <Card size="small" title="Sozlamalar">
           <div className="space-y-3">
+            {!!preview && (
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                Tanlangan xona uchun taxminiy checkout hisoblari shu yerda ko'rsatildi. Istasangiz qiymatlarni qo'lda o'zgartirishingiz mumkin.
+              </div>
+            )}
             <div>
               <div className="text-sm text-gray-500 mb-1">Chegirma</div>
-              <InputNumber min={0} step={1} value={discount} onChange={value => setDiscount(value || 0)} className="w-full" />
+              <InputNumber
+                min={0}
+                step={1}
+                value={discount}
+                onChange={value => {
+                  setDiscountTouched(true)
+                  setDiscount(value || 0)
+                }}
+                className="w-full"
+              />
             </div>
             <div>
               <div className="text-sm text-gray-500 mb-1">Qo'shimcha to'lov</div>
-              <InputNumber min={0} step={1} value={extraCharges} onChange={value => setExtraCharges(value || 0)} className="w-full" />
+              <InputNumber
+                min={0}
+                step={1}
+                value={extraCharges}
+                onChange={value => {
+                  setExtraTouched(true)
+                  setExtraCharges(value || 0)
+                }}
+                className="w-full"
+              />
             </div>
             <div>
               <div className="text-sm text-gray-500 mb-1">Izoh</div>
-              <Input.TextArea rows={3} value={extraReason} onChange={event => setExtraReason(event.target.value)} placeholder="Masalan: minibar yoki kech checkout" />
+              <Input.TextArea
+                rows={3}
+                value={extraReason}
+                onChange={event => {
+                  setExtraTouched(true)
+                  setExtraReason(event.target.value)
+                }}
+                placeholder="Masalan: minibar yoki kech checkout"
+              />
             </div>
+            {!!preview?.suggested_extra_charge_reason && (
+              <div className="text-xs text-gray-500">
+                Tavsiya etilgan izoh: {preview.suggested_extra_charge_reason}
+              </div>
+            )}
           </div>
         </Card>
       </div>
@@ -301,6 +384,7 @@ function CheckOutPanel({ room, onCompleted }) {
 export default function Reception() {
   const [form] = Form.useForm()
   const [filters, setFilters] = useState({ room_type: undefined, floor: undefined, near_lift: false })
+  const [cleaningSort, setCleaningSort] = useState('room_number')
   const [occupiedFilters, setOccupiedFilters] = useState({ search: '', room_type: 'all', floor: undefined })
   const [allRoomFilters, setAllRoomFilters] = useState({ room_type: undefined, floor: undefined, near_lift: false, status: 'all' })
   const [availableRooms, setAvailableRooms] = useState([])
@@ -413,6 +497,7 @@ export default function Reception() {
         },
         room_type: selectedRoom.room_type,
         room_number: selectedRoom.number,
+        planned_check_out: values.planned_check_out ? new Date(values.planned_check_out).toISOString() : null,
         floor_preference: filters.floor || null,
         lift_preference: filters.near_lift,
       })
@@ -426,6 +511,25 @@ export default function Reception() {
       setSubmitting(false)
     }
   }
+
+  const sortedAvailableRooms = useMemo(() => {
+    const rooms = [...availableRooms]
+    rooms.sort((a, b) => {
+      if (cleaningSort === 'room_number') {
+        return String(a.number).localeCompare(String(b.number), undefined, { numeric: true })
+      }
+
+      const aTime = a.last_cleaned_at ? new Date(a.last_cleaned_at).getTime() : 0
+      const bTime = b.last_cleaned_at ? new Date(b.last_cleaned_at).getTime() : 0
+
+      if (cleaningSort === 'recently_cleaned') {
+        return bTime - aTime
+      }
+
+      return aTime - bTime
+    })
+    return rooms
+  }, [availableRooms, cleaningSort])
 
   const filteredOccupiedRooms = useMemo(() => (
     occupiedRooms.filter(room => {
@@ -554,10 +658,28 @@ export default function Reception() {
 
                 <div className="flex gap-3 mb-4">
                   <Button type="primary" onClick={() => loadAvailableRooms(filters)}>Filterlash</Button>
+                  <Dropdown
+                    menu={{
+                      selectable: true,
+                      selectedKeys: [cleaningSort],
+                      onClick: ({ key }) => setCleaningSort(key),
+                      items: [
+                        { key: 'room_number', label: 'Oddiy ketma-ketlik' },
+                        { key: 'oldest_cleaned', label: 'Avval oldin tozalanganlar' },
+                        { key: 'recently_cleaned', label: 'Avval yaqinda tozalanganlar' },
+                      ],
+                    }}
+                    trigger={['click']}
+                  >
+                    <Button icon={<SortAscendingOutlined />}>
+                      Sort
+                    </Button>
+                  </Dropdown>
                   <Button
                     onClick={() => {
                       const next = { room_type: undefined, floor: undefined, near_lift: false }
                       setFilters(next)
+                      setCleaningSort('room_number')
                       loadAvailableRooms(next)
                     }}
                   >
@@ -565,9 +687,9 @@ export default function Reception() {
                   </Button>
                 </div>
 
-                {availableRooms.length ? (
+                {sortedAvailableRooms.length ? (
                   <div className="grid xl:grid-cols-3 md:grid-cols-2 gap-4">
-                    {availableRooms.map(room => (
+                    {sortedAvailableRooms.map(room => (
                       <RoomCard
                         key={room.number}
                         room={room}
@@ -598,6 +720,13 @@ export default function Reception() {
                   <Form.Item name="email" label="Email" rules={[{ type: 'email', message: "To'g'ri email kiriting" }]}>
                     <Input placeholder="ali@example.com" />
                   </Form.Item>
+                  <Form.Item
+                    name="planned_check_out"
+                    label="Rejalashtirilgan check-out"
+                    initialValue={formatDateTimeLocalValue(new Date(Date.now() + 24 * 60 * 60 * 1000))}
+                  >
+                    <Input type="datetime-local" />
+                  </Form.Item>
                   <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 mb-4">
                     <div className="text-xs text-gray-500">Biriktiriladigan xona</div>
                     <div className="font-semibold mt-1">
@@ -605,6 +734,9 @@ export default function Reception() {
                     </div>
                     <div className="text-xs text-gray-500 mt-2">
                       {selectedRoom ? `Tunlik narx: ${formatMoney(selectedRoom.nightly_rate)}` : "Chap tomondan bo'sh xonani tanlang."}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-2">
+                      Checkout hisobida erta chiqish chegirmasi va kech chiqish qo'shimcha to'lovi shu vaqtga qarab hisoblanadi.
                     </div>
                   </div>
                   <Button type="primary" htmlType="submit" block size="large" loading={submitting}>

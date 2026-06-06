@@ -123,6 +123,7 @@ class Booking(Base):
     guest_id = Column(Integer, ForeignKey("guests.id"), nullable=False)
     room_id = Column(Integer, ForeignKey("rooms.id"), nullable=False)
     check_in = Column(DateTime(timezone=True), default=func.now())
+    planned_check_out = Column(DateTime(timezone=True), nullable=True)
     check_out = Column(DateTime(timezone=True), nullable=True)
     status = Column(SAEnum(BookingStatus), default=BookingStatus.active)
     # Preferences stored at booking time
@@ -204,4 +205,3 @@ class User(Base):
     role = Column(SAEnum(UserRole), nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
-

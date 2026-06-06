@@ -56,6 +56,7 @@ class CheckInRequest(BaseModel):
     guest: GuestCreate
     room_type: RoomType
     room_number: Optional[str] = None
+    planned_check_out: Optional[datetime] = None
     floor_preference: Optional[int] = None    # preferred floor
     lift_preference: Optional[bool] = False   # prefer near lift/stairs
 
@@ -250,4 +251,3 @@ class DashboardSnapshot(BaseModel):
     active_orders: List[OrderOut]
     open_issues: List[IssueOut]
     active_bookings: List[dict]
-

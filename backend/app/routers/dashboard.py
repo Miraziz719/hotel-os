@@ -8,6 +8,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import Room, RoomServiceOrder, MaintenanceIssue, Booking, Guest
 from app.models import OrderStatus, IssueStatus, BookingStatus
+from app.redis_client import get_recent_events
 from app.websocket_manager import manager
 from app.auth import requireRoles, ALGORITHM
 
@@ -66,6 +67,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=""
 
     await manager.connect(websocket)
     try:
+        await websocket.send_json({"event": "connected", "data": {"message": "WebSocket connected"}})
         while True:
             data = await websocket.receive_text()
             if data == "ping":
@@ -73,3 +75,10 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=""
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
+
+@router.get("/recent-events")
+async def recent_events(
+    limit: int = 30,
+    _: dict = Depends(_adminOnly),
+):
+    return await get_recent_events(limit)

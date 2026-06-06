@@ -75,7 +75,7 @@ async def request_cleaning(
         raise HTTPException(status_code=403, detail="Siz check-out qilgansiz. So'rov yuborish uchun check-in holatida bo'lishingiz kerak.")
 
     requested_by = f"guest ({currentUser.get('username', room_number)})"
-    result = await svc.request_cleaning(room_number, requested_by)
+    result = await svc.request_cleaning(room_number, requested_by, data.note, data.image_url)
     if result["already_queued"]:
       return {"message": f"{room_number}-xona allaqachon tozalash navbatida", **result}
     return {"message": f"{room_number}-xona uchun tozalash so'rovi yuborildi", **result}
@@ -105,4 +105,3 @@ async def my_status(
         "cleaned_by": room.cleaned_by,
         "last_cleaned_at": room.last_cleaned_at,
     }
-

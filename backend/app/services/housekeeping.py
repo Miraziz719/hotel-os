@@ -114,7 +114,12 @@ def get_cleaning_queue() -> list[str]:
     return list(cleaning_queue)
 
 
-async def request_cleaning(room_number: str, requested_by: str = "guest") -> dict:
+async def request_cleaning(
+    room_number: str,
+    requested_by: str = "guest",
+    note: str | None = None,
+    image_url: str | None = None,
+) -> dict:
     already_queued = room_number in cleaning_queue
     if not already_queued:
         cleaning_queue.append(room_number)
@@ -122,11 +127,15 @@ async def request_cleaning(room_number: str, requested_by: str = "guest") -> dic
     await publish_event("housekeeping_requested", {
         "room_number": room_number,
         "requested_by": requested_by,
+        "note": note,
+        "image_url": image_url,
     })
     await publish_event("dashboard_update", {
         "type": "housekeeping_requested",
         "room": room_number,
         "requested_by": requested_by,
+        "note": note,
+        "image_url": image_url,
         "queue": list(cleaning_queue),
     })
 
@@ -134,6 +143,8 @@ async def request_cleaning(room_number: str, requested_by: str = "guest") -> dic
         "room_number": room_number,
         "already_queued": already_queued,
         "queue_size": len(cleaning_queue),
+        "note": note,
+        "image_url": image_url,
     }
 
 

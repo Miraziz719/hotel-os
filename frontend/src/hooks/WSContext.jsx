@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { getToken, flushQueue } from '../utils/api'
+import { flushQueue, getRealtimeSocketUrl, getToken } from '../utils/api'
 
 const WSContext = createContext({ live: false, register: () => () => {} })
 
@@ -7,7 +7,6 @@ export function useWSStatus() {
   return useContext(WSContext).live
 }
 
-// Internal registry: event → Set of callbacks
 const registry = {}
 
 function register(event, cb) {
@@ -28,29 +27,24 @@ export function WSProvider({ children }) {
       if (!alive) return
       const token = getToken()
       if (!token) {
-        // Not logged in yet — check again shortly (also woken by 'auth-changed').
         timer = setTimeout(connect, 3000)
         return
       }
-      // Avoid duplicate sockets
       if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return
 
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const ws = new WebSocket(`${proto}://${location.host}/dashboard/ws?token=${token}`)
+      const ws = new WebSocket(getRealtimeSocketUrl(token))
       wsRef.current = ws
 
       ws.onopen = async () => {
         setLive(true)
-        // Connection restored → push any work done while offline first,
-        // then let subscribers reload their fresh data.
         await flushQueue()
-        registry['_onConnect']?.forEach(cb => cb())
+        registry._onConnect?.forEach(cb => cb())
       }
 
-      ws.onmessage = (e) => {
-        if (e.data === 'pong') return
+      ws.onmessage = event => {
+        if (event.data === 'pong') return
         try {
-          const msg = JSON.parse(e.data)
+          const msg = JSON.parse(event.data)
           registry[msg.event]?.forEach(cb => cb(msg.data))
         } catch {}
       }
@@ -64,7 +58,6 @@ export function WSProvider({ children }) {
       ws.onerror = () => ws.close()
     }
 
-    // Reconnect immediately when the user logs in / out.
     function onAuthChange() {
       try { wsRef.current?.close() } catch {}
       wsRef.current = null
@@ -72,8 +65,8 @@ export function WSProvider({ children }) {
       clearTimeout(timer)
       connect()
     }
-    window.addEventListener('auth-changed', onAuthChange)
 
+    window.addEventListener('auth-changed', onAuthChange)
     connect()
 
     const ping = setInterval(() => {
@@ -92,10 +85,6 @@ export function WSProvider({ children }) {
   return <WSContext.Provider value={{ live, register }}>{children}</WSContext.Provider>
 }
 
-/**
- * Subscribe to WS events. handlers = { eventName: cb, _onConnect: cb }
- * Returns { live } – true when WS is connected.
- */
 export function useWSEvents(handlers) {
   const { live, register } = useContext(WSContext)
   const handlersRef = useRef(handlers)

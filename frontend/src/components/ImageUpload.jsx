@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Upload, Button, Image } from 'antd'
 import { CameraOutlined, DeleteOutlined } from '@ant-design/icons'
-import { getToken } from '../utils/api'
+import { uploadFile } from '../utils/api'
 
 export default function ImageUpload({ value, onChange, label = "Rasm yuklash" }) {
   const [uploading, setUploading] = useState(false)
@@ -9,18 +9,7 @@ export default function ImageUpload({ value, onChange, label = "Rasm yuklash" })
   async function handleUpload({ file }) {
     setUploading(true)
     try {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await fetch('/upload', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${getToken()}` },
-        body: form,
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Yuklashda xato')
-      }
-      const data = await res.json()
+      const data = await uploadFile(file)
       onChange(data.url)
     } catch (e) {
       alert(e.message)

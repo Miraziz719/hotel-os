@@ -2,7 +2,7 @@
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from app.auth import requireRoles
 
@@ -12,13 +12,14 @@ UPLOADS_DIR = Path(__file__).resolve().parents[2] / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-MAX_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_SIZE = 10 * 1024 * 1024
 
 _any_staff = requireRoles("admin", "reception", "housekeeping", "room_service", "maintenance", "guest")
 
 
 @router.post("")
 async def upload_file(
+    request: Request,
     file: UploadFile = File(...),
     _: dict = Depends(_any_staff),
 ):
@@ -33,4 +34,4 @@ async def upload_file(
     filename = f"{uuid.uuid4().hex}{ext}"
     (UPLOADS_DIR / filename).write_bytes(data)
 
-    return {"url": f"/uploads/{filename}"}
+    return {"url": str(request.base_url).rstrip("/") + f"/uploads/{filename}"}

@@ -17,14 +17,13 @@ export default function RoomServiceNewOrder() {
     async function loadRooms() {
       try {
         setError('')
-        const data = await api.get('/room-service/rooms')
+        const data = await api.get('/reception/occupied-rooms')
         if (!active) return
         setRooms(
           data
-            .filter(room => room.status === 'occupied')
             .map(room => ({
-              value: room.number,
-              label: `Xona ${room.number} - ${room.room_type}`,
+              value: room.room_number,
+              label: `Xona ${room.room_number} - ${room.room_type}`,
             })),
         )
       } catch (e) {

@@ -4,7 +4,7 @@ Reception Service
 Handles guest check-in, room assignment, check-out, and billing.
 """
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -23,6 +23,54 @@ def _defaultGuestPin(phone: str | None) -> str:
 
 def _decimal(value: Decimal | None) -> Decimal:
     return value or Decimal("0.00")
+
+
+def _default_planned_checkout(check_in: datetime) -> datetime:
+    return check_in + timedelta(days=1)
+
+
+def _effective_planned_checkout(booking: Booking) -> datetime:
+    return booking.planned_check_out or _default_planned_checkout(booking.check_in)
+
+
+def _quantize_money(value: Decimal) -> Decimal:
+    return value.quantize(Decimal("0.01"))
+
+
+def _calculate_pricing_adjustments(
+    booking: Booking,
+    nightly_rate: Decimal,
+    room_charges: Decimal,
+    checkout_time: datetime,
+) -> tuple[Decimal, Decimal, str | None, list[str], datetime]:
+    planned_check_out = _effective_planned_checkout(booking)
+    stayed_hours = max(0, (checkout_time - booking.check_in).total_seconds()) / 3600
+    pricing_notes: list[str] = []
+    suggested_discount = Decimal("0.00")
+    suggested_extra = Decimal("0.00")
+    extra_reason: str | None = None
+
+    if checkout_time < planned_check_out:
+        if stayed_hours <= 12:
+            suggested_discount = nightly_rate * Decimal("0.50")
+            pricing_notes.append("Mehmon 12 soatdan kam turgani uchun 50% chegirma tavsiya qilindi.")
+        else:
+            suggested_discount = nightly_rate * Decimal("0.25")
+            pricing_notes.append("Mehmon erta chiqayotgani uchun 25% chegirma tavsiya qilindi.")
+        suggested_discount = min(room_charges, _quantize_money(suggested_discount))
+
+    if checkout_time > planned_check_out:
+        late_hours = (checkout_time - planned_check_out).total_seconds() / 3600
+        if late_hours <= 6:
+            suggested_extra = _quantize_money(nightly_rate * Decimal("0.50"))
+            extra_reason = "Kech check-out (6 soatgacha)"
+            pricing_notes.append("Mehmon 6 soatgacha kech chiqqani uchun yarim kunlik qo'shimcha to'lov qo'shildi.")
+        else:
+            suggested_extra = _quantize_money(nightly_rate)
+            extra_reason = "Kech check-out (6 soatdan ko'p)"
+            pricing_notes.append("Mehmon 6 soatdan ko'p kech chiqqani uchun bir kunlik qo'shimcha to'lov qo'shildi.")
+
+    return suggested_discount, suggested_extra, extra_reason, pricing_notes, planned_check_out
 
 
 async def has_active_booking(db: AsyncSession, room_number: str) -> bool:
@@ -88,7 +136,7 @@ async def get_available_rooms(
     if near_lift is not None:
         stmt = stmt.where(Room.near_lift == near_lift)
 
-    result = await db.execute(stmt.order_by(Room.floor, Room.number))
+    result = await db.execute(stmt.order_by(Room.last_cleaned_at.asc(), Room.floor.asc(), Room.number.asc()))
     return list(result.scalars().all())
 
 
@@ -151,6 +199,7 @@ async def check_in(db: AsyncSession, data: CheckInRequest):
         booking = Booking(
             guest_id=guest.id,
             room_id=room.id,
+            planned_check_out=data.planned_check_out,
             floor_preference=data.floor_preference,
             lift_preference=data.lift_preference or False,
         )
@@ -211,6 +260,7 @@ async def get_occupied_rooms(db: AsyncSession) -> list[dict]:
             "guest_email": guest.email,
             "guest_phone": guest.phone,
             "check_in": booking.check_in,
+            "planned_check_out": _effective_planned_checkout(booking),
             "nights": nights,
             "nightly_rate": room.nightly_rate,
             "room_charges": room_charges,
@@ -268,6 +318,12 @@ async def get_checkout_preview(
     now = datetime.now(timezone.utc)
     nights = max(1, (now - booking.check_in).days)
     room_charges = _decimal(room.nightly_rate) * nights
+    suggested_discount, suggested_extra, suggested_reason, pricing_notes, planned_check_out = _calculate_pricing_adjustments(
+        booking,
+        _decimal(room.nightly_rate),
+        room_charges,
+        now,
+    )
 
     orders_result = await db.execute(
         select(RoomServiceOrder).where(
@@ -289,12 +345,17 @@ async def get_checkout_preview(
         "guest_email": guest.email,
         "guest_phone": guest.phone,
         "check_in": booking.check_in,
+        "planned_check_out": planned_check_out,
         "preview_at": now,
         "nights": nights,
         "nightly_rate": room.nightly_rate,
         "room_charges": room_charges,
         "service_charges": service_charges,
         "service_orders_count": len(orders),
+        "suggested_discount": suggested_discount,
+        "suggested_extra_charges": suggested_extra,
+        "suggested_extra_charge_reason": suggested_reason,
+        "pricing_notes": pricing_notes,
         "discount": discount_value,
         "extra_charges": extra_value,
         "total": total,
@@ -329,6 +390,12 @@ async def check_out(db: AsyncSession, data: CheckOutRequest):
         check_out_time = datetime.now(timezone.utc)
         nights = max(1, (check_out_time - booking.check_in).days)
         room_charges = _decimal(room.nightly_rate) * nights
+        suggested_discount, suggested_extra, suggested_reason, _, _ = _calculate_pricing_adjustments(
+            booking,
+            _decimal(room.nightly_rate),
+            room_charges,
+            check_out_time,
+        )
 
         orders_result = await db.execute(
             select(RoomServiceOrder).where(
@@ -341,6 +408,12 @@ async def check_out(db: AsyncSession, data: CheckOutRequest):
 
         discount = _decimal(data.discount)
         extra = _decimal(data.extra_charges)
+        if discount == Decimal("0.00") and suggested_discount > Decimal("0.00"):
+            discount = suggested_discount
+        if extra == Decimal("0.00") and suggested_extra > Decimal("0.00"):
+            extra = suggested_extra
+        if not data.extra_charge_reason and suggested_reason and extra > Decimal("0.00"):
+            data.extra_charge_reason = suggested_reason
         total = max(Decimal("0.00"), room_charges + service_charges + extra - discount)
 
         invoice = Invoice(

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     # App
     debug: bool = True
+    cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
 
     @field_validator("debug", mode="before")
     @classmethod
@@ -36,6 +37,9 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = Path(__file__).resolve().parents[1] / ".env"
+
+    def get_cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 settings = Settings()

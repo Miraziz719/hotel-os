@@ -78,10 +78,6 @@ export default function RoomServiceMenu({
   }
 
   function openConfirm() {
-    if (allowRoomSelection && !selectedRoom) {
-      setMsg({ type: 'error', text: 'Avval xona tanlang.' })
-      return
-    }
     if (selectedItems.length === 0) {
       setMsg({ type: 'error', text: 'Kamida bitta mahsulot tanlang.' })
       return
@@ -279,6 +275,11 @@ export default function RoomServiceMenu({
                     showSearch
                     optionFilterProp="label"
                   />
+                  {!selectedRoom && (
+                    <div className="text-xs text-red-500 mt-2">
+                      Buyurtmani yuborishdan oldin xonani tanlang.
+                    </div>
+                  )}
                 </div>
               )}
               <div className="text-sm text-gray-500 mb-3">

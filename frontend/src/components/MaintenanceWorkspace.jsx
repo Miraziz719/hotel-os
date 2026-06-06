@@ -327,6 +327,7 @@ export default function MaintenanceWorkspace({ isGuest = false }) {
         setActiveIssues(active)
         setCompletedIssues(completed)
       }
+      setMsg(null)
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     } finally {
@@ -344,9 +345,12 @@ export default function MaintenanceWorkspace({ isGuest = false }) {
     if (isGuest) return
     setRoomsLoading(true)
     api.get('/maintenance/rooms')
-      .then(data => setRoomOptions(
-        data.map(r => ({ value: r.number, label: `Xona ${r.number} · ${r.floor}-qavat · ${r.room_type}` }))
-      ))
+      .then(data => {
+        setRoomOptions(
+          data.map(r => ({ value: r.number, label: `Xona ${r.number} · ${r.floor}-qavat · ${r.room_type}` }))
+        )
+        setMsg(null)
+      })
       .catch(() => {})
       .finally(() => setRoomsLoading(false))
   }, [isGuest])

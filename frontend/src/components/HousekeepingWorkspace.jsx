@@ -27,7 +27,20 @@ function formatDateTime(value) {
   return date.toLocaleString()
 }
 
-function RequestTab({ isGuest, roomNumber, status, msg, loading, statusLoading, onRequestCleaning, onRefresh }) {
+function RequestTab({
+  isGuest,
+  roomNumber,
+  status,
+  msg,
+  loading,
+  statusLoading,
+  requestNote,
+  setRequestNote,
+  requestImage,
+  setRequestImage,
+  onRequestCleaning,
+  onRefresh,
+}) {
   const requestStatus = useMemo(() => {
     if (!status) return { label: 'Yuklanmoqda', color: 'default' }
     if (status.room_status === 'cleaning') return { label: 'Tozalanmoqda', color: 'processing' }
@@ -54,15 +67,29 @@ function RequestTab({ isGuest, roomNumber, status, msg, loading, statusLoading, 
           </div>
         </div>
         {isGuest && (
-          <Button
-            type="primary"
-            size="large"
-            loading={loading}
-            onClick={onRequestCleaning}
-            style={{ background: 'linear-gradient(135deg,#1a7a4a,#2d5be3)', border: 'none', minWidth: 220 }}
-          >
-            Tozalashni chaqirish
-          </Button>
+          <div className="w-full md:w-80">
+            <Input.TextArea
+              rows={2}
+              value={requestNote}
+              onChange={event => setRequestNote(event.target.value)}
+              placeholder="Qo'shimcha izoh (ixtiyoriy)"
+              className="mb-3"
+            />
+            <ImageUpload
+              value={requestImage}
+              onChange={setRequestImage}
+              label="Muammo rasmi (ixtiyoriy)"
+            />
+            <Button
+              type="primary"
+              size="large"
+              loading={loading}
+              onClick={onRequestCleaning}
+              style={{ background: 'linear-gradient(135deg,#1a7a4a,#2d5be3)', border: 'none', minWidth: 220, width: '100%' }}
+            >
+              Tozalashni chaqirish
+            </Button>
+          </div>
         )}
       </div>
 
@@ -288,6 +315,8 @@ export default function HousekeepingWorkspace({ isGuest = false }) {
   const [statusLoading, setStatusLoading] = useState(true)
   const [updatingRoom, setUpdatingRoom] = useState(null)
   const [completeModal, setCompleteModal] = useState(null)
+  const [requestImage, setRequestImage] = useState(null)
+  const [requestNote, setRequestNote] = useState('')
   const [cleanImage, setCleanImage] = useState(null)
   const [cleanNote, setCleanNote] = useState('')
 
@@ -367,8 +396,15 @@ export default function HousekeepingWorkspace({ isGuest = false }) {
     setMsg(null)
     setLoading(true)
     try {
-      const res = await api.post('/housekeeping/request-cleaning', { room_number: roomNumber })
+      const payload = {
+        room_number: roomNumber,
+        image_url: requestImage || null,
+        note: requestNote || null,
+      }
+      const res = await api.post('/housekeeping/request-cleaning', payload)
       setMsg({ type: 'success', text: res.message })
+      setRequestImage(null)
+      setRequestNote('')
       await loadData()
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
@@ -423,6 +459,10 @@ export default function HousekeepingWorkspace({ isGuest = false }) {
           msg={msg}
           loading={loading}
           statusLoading={statusLoading}
+          requestNote={requestNote}
+          setRequestNote={setRequestNote}
+          requestImage={requestImage}
+          setRequestImage={setRequestImage}
           onRequestCleaning={requestCleaning}
           onRefresh={loadData}
         />
