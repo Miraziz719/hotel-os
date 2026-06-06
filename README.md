@@ -1,8 +1,8 @@
 # HotelOS – Real-Time Hotel Management System
 
 **Pearson BTEC Level 3 – Unit 4: Programming**  
-**Student:** *(your name)*  
-**Date:** 2024
+**Student:** *Miraziz Ergashev*  
+**Date:** 2026
 
 ---
 

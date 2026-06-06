@@ -1,0 +1,18 @@
+.claude/
+
+# Python backend
+backend/.env
+backend/__pycache__/
+backend/**/*.pyc
+backend/**/__pycache__/
+
+# Runtime uploads
+backend/uploads/
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+
+# General
+.DS_Store
+Thumbs.db
