@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; }
+#root { min-height: 100vh; }
+
+/* This app does not use Ant Design modal/drawer flows, so hide any stale masks
+   that can get stuck above the UI after navigation or hot reloads. */
+.ant-modal-mask,
+.ant-drawer-mask {
+  display: none !important;
+}
+
+.ant-tabs-nav-list {
+  margin-top: -14px;
+}
+
+/* Hide scrollbar on nav */
+nav::-webkit-scrollbar { display: none; }
